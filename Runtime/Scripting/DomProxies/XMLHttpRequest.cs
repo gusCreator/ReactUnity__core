@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using System.Reflection;
 using ReactUnity.Helpers;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -81,7 +82,7 @@ namespace ReactUnity.Scripting.DomProxies
             !request.isModifiable ? 3 :
 #endif
             1;
-        public int status => (int) request.responseCode;
+        public int status => (int)request.responseCode;
         public string statusText => isError ? "error" : "ok";
 
         public string DONE => request.isDone ? "complete" : "";
@@ -152,14 +153,14 @@ namespace ReactUnity.Scripting.DomProxies
         public void append(object name, object value)
         {
             List<string> postList;
-            if (!postData.TryGetValue((string) name, out postList))
+            if (!postData.TryGetValue((string)name, out postList))
             {
                 postList = new List<string>();
             }
-            postList.Add((string) value);
+            postList.Add((string)value);
 
-            postData.Remove((string) name);
-            postData.Add((string) name, postList);
+            postData.Remove((string)name);
+            postData.Add((string)name, postList);
         }
 
         public void send(object o = null)
@@ -273,7 +274,15 @@ namespace ReactUnity.Scripting.DomProxies
 
             if (data is string s)
             {
-                SetupPost(s);
+                if (contentType.StartsWith("image/"))
+                {
+                    SetupBytesPost(s);
+
+                }
+                else
+                {
+                    SetupPost(s);
+                }
             }
             else if (data is WWWForm f)
             {
@@ -293,13 +302,13 @@ namespace ReactUnity.Scripting.DomProxies
             }
             else if (context.Script.Engine.IsScriptObject(data))
             {
+                Debug.Log(data);
                 var dt = context.Script.Engine.TraverseScriptObject(data);
 
                 var dic = new Dictionary<string, string>();
 
                 while (dt.MoveNext())
                     if (dt.Current.Value is string ss) dic[dt.Current.Key] = ss;
-
                 var tmpReq = UnityWebRequest.Post(request.url, dic);
                 ReplaceUploadDownloadHandlers(tmpReq);
             }
@@ -330,6 +339,24 @@ namespace ReactUnity.Scripting.DomProxies
 
                 var array = Encoding.UTF8.GetBytes(body);
                 request.uploadHandler = new UploadHandlerRaw(array);
+                request.uploadHandler.contentType = type;
+            }
+        }
+        void SetupBytesPost(string body)
+        {
+            request.downloadHandler = new DownloadHandlerBuffer();
+            if (!string.IsNullOrEmpty(body))
+            {
+                Debug.Log("Se enviará como bytes");
+                var type = "application/octet-stream";
+                if (!string.IsNullOrWhiteSpace(request.uploadHandler?.contentType))
+                    type = request.uploadHandler.contentType;
+                else if (!string.IsNullOrWhiteSpace(contentType))
+                    type = contentType;
+
+                byte[] bytes = Convert.FromBase64String(body);
+                request.uploadHandler = new UploadHandlerRaw(bytes);
+                Debug.Log(type);
                 request.uploadHandler.contentType = type;
             }
         }
